@@ -349,6 +349,17 @@ def file_size(path: PathOrStr) -> int:
     else:
         return os.stat(path).st_size
 
+import aiofiles
+import asyncio
+
+async def _file_upload(source, url):
+    async with aiofiles.open(source, mode='rb') as src:
+        async with aiofiles.open(url.path, mode='wb') as dst:
+            while True:
+                chunk = await src.read(1024*1024)
+                if not chunk:
+                    break
+                await dst.write(chunk)
 
 def upload(source: PathOrStr, target: str, save_overwrite: bool = False):
     """Upload source file to a target location on GCS or S3."""
@@ -361,6 +372,10 @@ def upload(source: PathOrStr, target: str, save_overwrite: bool = False):
         _gcs_upload(source, parsed.netloc, parsed.path.strip("/"), save_overwrite=save_overwrite)
     elif parsed.scheme in ("s3", "r2", "weka"):
         _s3_upload(source, parsed.scheme, parsed.netloc, parsed.path.strip("/"), save_overwrite=save_overwrite)
+    elif parsed.scheme in ("file"):
+        if not os.path.exists(os.path.dirname(parsed.path)):
+            os.makedirs(os.path.dirname(parsed.path), exist_ok=True)
+        asyncio.run(_file_upload(source, parsed))
     else:
         raise NotImplementedError(f"Upload not implemented for '{parsed.scheme}' scheme")
 
@@ -697,21 +712,38 @@ def _s3_find_latest_checkpoint(scheme: str, bucket_name: str, prefix: str) -> Op
 def _http_file_size(scheme: str, host_name: str, path: str) -> int:
     import requests
 
-    response = requests.head(f"{scheme}://{host_name}/{path}", allow_redirects=True)
-    return int(response.headers.get("content-length"))
-
+    while True:
+        try:
+            response = requests.head(f"{scheme}://{host_name}/{path}", allow_redirects=True)
+            return int(response.headers.get("content-length"))
+        except Exception as e:
+            import time
+            import random
+            secs = random.randint(1, 30)
+            time.sleep(secs)
+            from datetime import datetime
+            print(f"{datetime.now().strftime('%Y-%m-%d %H:%M:%S')}: Got exception {e} trying to acceess {scheme}://{host_name}/{path}. Trying again after {secs} seconds", flush=True)
 
 def _http_get_bytes_range(scheme: str, host_name: str, path: str, bytes_start: int, num_bytes: int) -> bytes:
     import requests
 
-    response = requests.get(
-        f"{scheme}://{host_name}/{path}", headers={"Range": f"bytes={bytes_start}-{bytes_start+num_bytes-1}"}
-    )
-    result = response.content
-    assert (
-        len(result) == num_bytes
-    ), f"expected {num_bytes} bytes, got {len(result)}"  # Some web servers silently ignore range requests and send everything
-    return result
+    while True:
+        try:
+            response = requests.get(
+                f"{scheme}://{host_name}/{path}", headers={"Range": f"bytes={bytes_start}-{bytes_start+num_bytes-1}"}
+            )
+            result = response.content
+            assert (
+                len(result) == num_bytes
+            ), f"expected {num_bytes} bytes, got {len(result)}"  # Some web servers silently ignore range requests and send everything
+            return result
+        except Exception as e:
+            import time
+            import random
+            secs = random.randint(1, 30)
+            time.sleep(secs)
+            from datetime import datetime
+            print(f"{datetime.now().strftime('%Y-%m-%d %H:%M:%S')}: Got exception {e} trying to read {scheme}://{host_name}/{path}. Trying again after {secs} seconds", flush=True)
 
 
 def save_hf_dataset_to_disk(
@@ -737,6 +769,7 @@ def save_hf_dataset_to_disk(
     ```
     """
     dataset_path = Path(datasets_dir) / hf_path / (name or "none") / split
+    print(755, dataset_path)
     return dataset.save_to_disk(str(dataset_path))
 
 

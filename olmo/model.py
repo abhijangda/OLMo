@@ -72,6 +72,8 @@ __all__ = [
     "OLMoGenerateOutput",
 ]
 
+UseMKM = True
+Factor1 = Factor2 = 2
 
 log = logging.getLogger(__name__)
 
@@ -403,6 +405,9 @@ def alibi_attention_bias(seq_len: int, config: ModelConfig, device: torch.device
     # shape: (1, n_heads, seq_len, seq_len)
     return alibi_bias * (1.0 / (2 ** m.view(1, config.n_heads, 1, 1)))  # type: ignore
 
+# from pyfastkron import fastkrontorch as fk
+
+from .layerMKM import CustomLayerMKM
 
 class OLMoBlock(nn.Module):
     """
@@ -445,17 +450,30 @@ class OLMoBlock(nn.Module):
         assert (self.act.output_multiplier * self.hidden_size) % 1 == 0
 
         # Attention output projection.
-        self.attn_out = nn.Linear(
-            config.d_model, config.d_model, bias=config.include_bias, device=config.init_device
-        )
+        if not UseMKM:
+            self.attn_out = nn.Linear(
+                config.d_model, config.d_model, bias=config.include_bias, device=config.init_device
+            )
+        else:
+            self.attn_out = CustomLayerMKM(
+                config.d_model, config.d_model, Factor1, Factor2, bias=config.include_bias, device=config.init_device
+            )
 
         # Feed-forward output projection.
-        self.ff_out = nn.Linear(
-            int(self.act.output_multiplier * self.hidden_size),
-            config.d_model,
-            bias=config.include_bias,
-            device=config.init_device,
-        )
+        if not UseMKM:
+            self.ff_out = nn.Linear(
+                int(self.act.output_multiplier * self.hidden_size),
+                config.d_model,
+                bias=config.include_bias,
+                device=config.init_device,
+            )
+        else:
+            self.ff_out = CustomLayerMKM(
+                int(self.act.output_multiplier * self.hidden_size),
+                config.d_model, Factor1, Factor2,
+                bias=config.include_bias,
+                device=config.init_device,
+            )
         self.ff_out._is_residual = True  # type: ignore
 
         # Rotary embeddings.
@@ -686,13 +704,22 @@ class OLMoSequentialBlock(OLMoBlock):
             config.effective_n_kv_heads * head_dim,
             config.effective_n_kv_heads * head_dim,
         )
-        self.att_proj = nn.Linear(
-            config.d_model, sum(self.fused_dims), bias=config.include_bias, device=config.init_device
-        )
-        # Feed-forward input projection.
-        self.ff_proj = nn.Linear(
-            config.d_model, self.hidden_size, bias=config.include_bias, device=config.init_device
-        )
+        if not UseMKM:
+            self.att_proj = nn.Linear(
+                config.d_model, sum(self.fused_dims), bias=config.include_bias, device=config.init_device
+            )
+            # Feed-forward input projection.
+            self.ff_proj = nn.Linear(
+                config.d_model, self.hidden_size, bias=config.include_bias, device=config.init_device
+            )
+        else:
+            self.att_proj = CustomLayerMKM(
+                config.d_model, sum(self.fused_dims), Factor1, Factor2, bias=config.include_bias, device=config.init_device
+            )
+            # Feed-forward input projection.
+            self.ff_proj = CustomLayerMKM(
+                config.d_model, self.hidden_size, Factor1, Factor2, bias=config.include_bias, device=config.init_device
+            )
 
         # Layer norms.
         self.attn_norm = LayerNorm.build(config, size=config.d_model)

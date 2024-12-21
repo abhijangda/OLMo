@@ -60,6 +60,7 @@ def write_json(text, path):
     with open(path, "w") as f:
         json.dump(text, f)
 
+UseMKM = True
 
 def write_model(
     model_path,

@@ -1,6 +1,7 @@
 from typing import Optional, Union
 
 import torch.nn as nn
+from .layerMKM import CustomLayerMKM
 
 __all__ = ["init_normal"]
 
@@ -13,10 +14,15 @@ def init_normal(
     # weights
     if init_cutoff_factor is not None:
         cutoff_value = init_cutoff_factor * std
-        nn.init.trunc_normal_(module.weight, mean=0.0, std=std, a=-cutoff_value, b=cutoff_value)
+        if type(module) is CustomLayerMKM:
+            nn.init.trunc_normal_(module.weight_1, mean=0.0, std=std, a=-cutoff_value, b=cutoff_value)
+            nn.init.trunc_normal_(module.weight_2, mean=0.0, std=std, a=-cutoff_value, b=cutoff_value)
+        else:
+            nn.init.trunc_normal_(module.weight, mean=0.0, std=std, a=-cutoff_value, b=cutoff_value)
     else:
         nn.init.normal_(module.weight, mean=0.0, std=std)
 
     # biases
-    if isinstance(module, nn.Linear) and module.bias is not None:
+    # TODO: Change here
+    if (isinstance(module, nn.Linear) or hasattr(module, 'bias')) and module.bias is not None:
         nn.init.zeros_(module.bias)
