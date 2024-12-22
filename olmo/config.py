@@ -229,6 +229,19 @@ class InitFnType(StrEnum):
     This is what metaseq calls "full megatron init". It is the init used for Llama 2.
     """
 
+@dataclass
+class CustomLayerMKMConfig(BaseConfig):
+    in_features: int
+    out_features: int
+    factor_1: List[int]
+    factor_2: List[int]
+    mkm_type: str = "single"  # Options: 'single', 'multi', 'multi_partial'
+    bias: bool = True
+    expansions_to_use: Optional[List[List[int]]] = field(default_factory=list)
+    """
+    List of list of indices specifying subsets of expansions to use in 'multi_partial' mode.
+    Ignored in 'single' and 'multi' modes.
+    """
 
 @dataclass
 class ModelConfig(BaseConfig):
@@ -472,6 +485,11 @@ class ModelConfig(BaseConfig):
     """
     Apply norm after the attention/feedforward layers rather than before, as introduced in the Swin transformer paper (Liu et al).
     """
+
+    # custom_layer_mkm: Optional[CustomLayerMKMConfig] = None
+    # """
+    # Configuration for the CustomLayerMKM layer.
+    # """
 
     @property
     def effective_n_kv_heads(self) -> int:

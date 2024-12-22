@@ -351,15 +351,10 @@ def file_size(path: PathOrStr) -> int:
 
 import aiofiles
 import asyncio
+import aioshutil
 
 async def _file_upload(source, url):
-    async with aiofiles.open(source, mode='rb') as src:
-        async with aiofiles.open(url.path, mode='wb') as dst:
-            while True:
-                chunk = await src.read(1024*1024)
-                if not chunk:
-                    break
-                await dst.write(chunk)
+    await aioshutil.copy(source, url.path)
 
 def upload(source: PathOrStr, target: str, save_overwrite: bool = False):
     """Upload source file to a target location on GCS or S3."""

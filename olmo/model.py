@@ -73,7 +73,9 @@ __all__ = [
 ]
 
 UseMKM = True
-Factor1 = Factor2 = 2
+Factor1 = Factor2 = [2, 4, 8]  # Default factors for single-expansion MKM
+# Factors1List = [2, 4]  # List of factors for multi-expansion MKM
+# Factors2List = [2, 4]  # List of factors for multi-expansion MKM
 
 log = logging.getLogger(__name__)
 
@@ -714,11 +716,16 @@ class OLMoSequentialBlock(OLMoBlock):
             )
         else:
             self.att_proj = CustomLayerMKM(
-                config.d_model, sum(self.fused_dims), Factor1, Factor2, bias=config.include_bias, device=config.init_device
+                config.d_model, sum(self.fused_dims), 
+                Factor1, Factor2,
+                bias=config.include_bias, 
+                device=config.init_device
             )
-            # Feed-forward input projection.
             self.ff_proj = CustomLayerMKM(
-                config.d_model, self.hidden_size, Factor1, Factor2, bias=config.include_bias, device=config.init_device
+                config.d_model, self.hidden_size,
+                Factor1, Factor2,
+                bias=config.include_bias,
+                device=config.init_device
             )
 
         # Layer norms.

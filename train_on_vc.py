@@ -21,6 +21,7 @@ if nodes > 1:
             run(f"ssh node-{node} 'rm -rf /home/aiscuser/ajangda ; mkdir /home/aiscuser/ajangda'")
             run(f"scp /home/aiscuser/ajangda/OLMo.zip node-{node}:/home/aiscuser/ajangda/OLMo.zip")
             run(f"ssh node-{node} 'unzip -o /home/aiscuser/ajangda/OLMo.zip -d /'")
+            run(f"ssh node-{node} 'cd /home/aiscuser/ajangda/OLMo/ ; pip install -e .[all] ; pip install ./pyfastkron-1.0.1-py3-none-any.whl'; pip install aioshutil")
         # run(f"ssh node-{node} killall -SIGKILL /home/ajangda/anaconda3/envs/mscclpp/bin/python")
 
 train_id = datetime.now().strftime('%Y%m-%d%H-%M%S')
