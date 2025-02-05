@@ -709,7 +709,7 @@ def _http_file_size(scheme: str, host_name: str, path: str) -> int:
 
     while True:
         try:
-            response = requests.head(f"{scheme}://{host_name}/{path}", allow_redirects=True)
+            response = requests.head(f"{scheme}://{host_name}/{path}", allow_redirects=True, timeout=10)
             return int(response.headers.get("content-length"))
         except Exception as e:
             import time
@@ -717,15 +717,18 @@ def _http_file_size(scheme: str, host_name: str, path: str) -> int:
             secs = random.randint(1, 30)
             time.sleep(secs)
             from datetime import datetime
-            print(f"{datetime.now().strftime('%Y-%m-%d %H:%M:%S')}: Got exception {e} trying to acceess {scheme}://{host_name}/{path}. Trying again after {secs} seconds", flush=True)
+            print(f"{datetime.now().strftime('%Y-%m-%d %H:%M:%S')}: Got exception {e} trying to access {scheme}://{host_name}/{path}. Trying again after {secs} seconds", flush=True)
 
 def _http_get_bytes_range(scheme: str, host_name: str, path: str, bytes_start: int, num_bytes: int) -> bytes:
     import requests
 
+    got_exception = False
     while True:
         try:
+            if got_exception:
+                print(f"729: Re-reading from {scheme}://{host_name}/{path}", flush=True)
             response = requests.get(
-                f"{scheme}://{host_name}/{path}", headers={"Range": f"bytes={bytes_start}-{bytes_start+num_bytes-1}"}
+                f"{scheme}://{host_name}/{path}", headers={"Range": f"bytes={bytes_start}-{bytes_start+num_bytes-1}"},timeout=10
             )
             result = response.content
             assert (
@@ -739,7 +742,7 @@ def _http_get_bytes_range(scheme: str, host_name: str, path: str, bytes_start: i
             time.sleep(secs)
             from datetime import datetime
             print(f"{datetime.now().strftime('%Y-%m-%d %H:%M:%S')}: Got exception {e} trying to read {scheme}://{host_name}/{path}. Trying again after {secs} seconds", flush=True)
-
+            got_exception = True
 
 def save_hf_dataset_to_disk(
     dataset: datasets.DatasetDict | datasets.Dataset,

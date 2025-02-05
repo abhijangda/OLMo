@@ -21,11 +21,11 @@ if nodes > 1:
             run(f"ssh node-{node} 'rm -rf /home/aiscuser/ajangda ; mkdir /home/aiscuser/ajangda'")
             run(f"scp /home/aiscuser/ajangda/OLMo.zip node-{node}:/home/aiscuser/ajangda/OLMo.zip")
             run(f"ssh node-{node} 'unzip -o /home/aiscuser/ajangda/OLMo.zip -d /'")
-            run(f"ssh node-{node} 'cd /home/aiscuser/ajangda/OLMo/ ; pip install -e .[all] ; pip install ./pyfastkron-1.0.1-py3-none-any.whl'; pip install aioshutil")
+            run(f"ssh node-{node} 'cd /home/aiscuser/ajangda/OLMo/ ; pip install -e .[all] ; pip install ./pyfastkron-1.0.1-py3-none-any.whl; pip install aioshutil'")
         # run(f"ssh node-{node} killall -SIGKILL /home/ajangda/anaconda3/envs/mscclpp/bin/python")
 
 train_id = datetime.now().strftime('%Y%m-%d%H-%M%S')
-torchrun = f"torchrun --rdzv_id=12345 --rdzv_backend=c10d --rdzv_endpoint={ip}:8645 --nnodes {nodes} --nproc_per_node=8 scripts/train.py configs/official-1124/OLMo2-7B-stage1.yaml --save_overwrite --wandb.name={train_id}"
+torchrun = f"torchrun --rdzv_id=12345 --rdzv_backend=c10d --rdzv_endpoint={ip}:8645 --nnodes {nodes} --nproc_per_node=8 scripts/train.py configs/official-1124/OLMo2-1B-MKM-stage1.yaml --save_overwrite --wandb.name={train_id}"
 for node in range(nodes):
     olmo_data = f"/scratch/AzureBlobStorage_CODE/scratch/workspaceblobstore/OLMo-data/{train_id}"
     remote_folder=f"{olmo_data}/node-{node}/"

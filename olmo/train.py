@@ -499,7 +499,7 @@ class Trainer:
         if num_checkpoints_to_keep > 0:
             while len(current_checkpoints) > num_checkpoints_to_keep:
                 self.remove_checkpoint(0, checkpoint_type)
-
+        print(502)
         barrier()
 
         if remote_checkpoint_dir is not None:
@@ -718,7 +718,11 @@ class Trainer:
         return labels[..., 1:].contiguous()
 
     def model_forward(
-        self, batch: Dict[str, Any], loss_reduction: str = "mean", compute_z_loss: bool = False
+        self,
+        batch: Dict[str, Any],
+        loss_reduction: str = "mean",
+        compute_z_loss: bool = False,
+        expansions_to_use: Optional[List[int]] = None
     ) -> Tuple[torch.Tensor, Optional[torch.Tensor], torch.Tensor]:
         # shape: (batch_size, seq_len, vocab_size)
         logits = self.dist_model(
@@ -727,6 +731,7 @@ class Trainer:
             attention_bias=batch.get("attention_bias"),
             doc_lens=batch.get("doc_lens"),
             max_doc_lens=batch.get("max_doc_lens"),
+            expansions_to_use=expansions_to_use,  # Pass expansions to model forward
         ).logits
         logits_for_loss = logits[..., :-1, :].contiguous()
         # shape: (batch_size * seq_len, vocab_size)
@@ -746,10 +751,11 @@ class Trainer:
         return ce_loss, z_loss, logits
 
     def train_micro_batch(
-        self, micro_batch: Dict[str, Any], batch_size_in_tokens: int
+        self, micro_batch: Dict[str, Any], batch_size_in_tokens: int, expansions: Optional[List[int]] = None
     ) -> Tuple[torch.Tensor, torch.Tensor, Optional[torch.Tensor]]:
         ce_loss, z_loss, logits = self.model_forward(
-            micro_batch, compute_z_loss=self.cfg.softmax_auxiliary_loss, loss_reduction="sum"
+            micro_batch, compute_z_loss=self.cfg.softmax_auxiliary_loss, loss_reduction="sum",
+            expansions_to_use=expansions
         )
         ce_loss = ce_loss / batch_size_in_tokens
 
@@ -797,19 +803,52 @@ class Trainer:
 
             with grad_sync_context():
                 with torch.autocast("cuda", enabled=True, dtype=self.cfg.autocast_precision):
-                    # Run forward pass.
-                    loss, ce_loss, z_loss = self.train_micro_batch(micro_batch, batch_size_in_tokens)
+                    if self.cfg.mkm_substeps:
+                        # Multi-substep training logic with memory optimization
+                        total_loss = torch.tensor(0.0, device=self.device)
+                        ce_batch_loss = torch.tensor(0.0, device=self.device)
+                        z_batch_loss = None if not self.cfg.softmax_auxiliary_loss else torch.tensor(0.0, device=self.device)
 
-                    # Update overall CE batch loss.
-                    ce_batch_loss += ce_loss.detach()
+                        for substep_expansions in self.cfg.mkm_substeps:
+                            # Clear GPU cache before each expansion
+                            torch.cuda.empty_cache()
 
-                    # Update overall Z batch loss.
-                    if z_loss is not None:
-                        assert z_batch_loss is not None
-                        z_batch_loss += z_loss.detach()
+                            # Run forward pass with specific expansions
+                            with torch.autocast("cuda", enabled=True, dtype=self.cfg.autocast_precision):
+                                loss, ce_loss, z_loss = self.train_micro_batch(
+                                    micro_batch, batch_size_in_tokens, expansions=substep_expansions
+                                )
 
-                # Run backward pass.
-                loss.backward()
+                                # Accumulate loss
+                                total_loss = total_loss + loss
+                                ce_batch_loss += ce_loss.detach()
+
+                                if z_loss is not None:
+                                    assert z_batch_loss is not None
+                                    z_batch_loss += z_loss.detach()
+
+                            # Immediately clear intermediate values
+                            del loss, ce_loss, z_loss
+                            torch.cuda.empty_cache()
+
+                        # Run backward pass
+                        total_loss.backward()
+
+                        # Clear more memory
+                        del total_loss
+                        torch.cuda.empty_cache()
+                    else:
+                        # Original single-step training logic - don't pass expansions parameter
+                        loss, ce_loss, z_loss = self.train_micro_batch(
+                            micro_batch, batch_size_in_tokens  # Remove expansions parameter for non-multi_partial
+                        )
+                        ce_batch_loss += ce_loss.detach()
+                        if z_loss is not None:
+                            assert z_batch_loss is not None
+                            z_batch_loss += z_loss.detach()
+
+                        # Run backward pass
+                        loss.backward()
 
             # Remove output hooks
             for hook in output_hooks:

@@ -230,20 +230,6 @@ class InitFnType(StrEnum):
     """
 
 @dataclass
-class CustomLayerMKMConfig(BaseConfig):
-    in_features: int
-    out_features: int
-    factor_1: List[int]
-    factor_2: List[int]
-    mkm_type: str = "single"  # Options: 'single', 'multi', 'multi_partial'
-    bias: bool = True
-    expansions_to_use: Optional[List[List[int]]] = field(default_factory=list)
-    """
-    List of list of indices specifying subsets of expansions to use in 'multi_partial' mode.
-    Ignored in 'single' and 'multi' modes.
-    """
-
-@dataclass
 class ModelConfig(BaseConfig):
     """
     OLMo (model) configuration.
@@ -486,10 +472,17 @@ class ModelConfig(BaseConfig):
     Apply norm after the attention/feedforward layers rather than before, as introduced in the Swin transformer paper (Liu et al).
     """
 
-    # custom_layer_mkm: Optional[CustomLayerMKMConfig] = None
-    # """
-    # Configuration for the CustomLayerMKM layer.
-    # """
+    use_mkm: bool = False
+    """Whether to use Matrix-Kronecker-Matrix layers"""
+    
+    mkm_type: str = "multi"
+    """Type of MKM to use: 'multi' or 'multi_partial'"""
+    
+    mkm_factor1: Optional[List[int]] = None
+    """First set of factors for MKM decomposition. If None, default values will be used."""
+    
+    mkm_factor2: Optional[List[int]] = None
+    """Second set of factors for MKM decomposition. If None, default values will be used."""
 
     @property
     def effective_n_kv_heads(self) -> int:
@@ -1268,6 +1261,9 @@ class TrainConfig(BaseConfig):
     Outputs of model submodules are saved during the provided steps. Submodule outputs
     can be compared using `scripts/compare_module_outputs.py`.
     """
+
+    mkm_substeps: Optional[List[List[int]]] = None
+    """Substep configurations for multi_partial MKM mode. If None, default values will be used."""
 
     @property
     def autocast_precision(self) -> torch.dtype:

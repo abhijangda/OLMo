@@ -72,11 +72,6 @@ __all__ = [
     "OLMoGenerateOutput",
 ]
 
-UseMKM = True
-Factor1 = Factor2 = [2, 4, 8]  # Default factors for single-expansion MKM
-# Factors1List = [2, 4]  # List of factors for multi-expansion MKM
-# Factors2List = [2, 4]  # List of factors for multi-expansion MKM
-
 log = logging.getLogger(__name__)
 
 
@@ -452,31 +447,40 @@ class OLMoBlock(nn.Module):
         assert (self.act.output_multiplier * self.hidden_size) % 1 == 0
 
         # Attention output projection.
-        if not UseMKM:
+        if not config.use_mkm:
             self.attn_out = nn.Linear(
                 config.d_model, config.d_model, bias=config.include_bias, device=config.init_device
             )
         else:
             self.attn_out = CustomLayerMKM(
-                config.d_model, config.d_model, Factor1, Factor2, bias=config.include_bias, device=config.init_device
+                config.d_model, 
+                config.d_model,
+                config.mkm_factor1,
+                config.mkm_factor2,
+                mkm_type=config.mkm_type,
+                bias=config.include_bias,
+                device=config.init_device
             )
 
-        # Feed-forward output projection.
-        if not UseMKM:
+        # Feed-forward output projection with MKM
+        if not config.use_mkm:
             self.ff_out = nn.Linear(
                 int(self.act.output_multiplier * self.hidden_size),
                 config.d_model,
                 bias=config.include_bias,
-                device=config.init_device,
+                device=config.init_device, 
             )
         else:
             self.ff_out = CustomLayerMKM(
                 int(self.act.output_multiplier * self.hidden_size),
-                config.d_model, Factor1, Factor2,
+                config.d_model,
+                config.mkm_factor1, 
+                config.mkm_factor2,
+                mkm_type=config.mkm_type,
                 bias=config.include_bias,
-                device=config.init_device,
+                device=config.init_device
             )
-        self.ff_out._is_residual = True  # type: ignore
+        self.ff_out._is_residual = True
 
         # Rotary embeddings.
         if self.config.rope:
@@ -609,6 +613,7 @@ class OLMoBlock(nn.Module):
         use_cache: bool = False,
         max_doc_len: Optional[int] = None,
         cu_doc_lens: Optional[torch.Tensor] = None,
+        expansions_to_use: Optional[List[int]] = None,  # Add parameter
     ) -> Tuple[torch.Tensor, Optional[Tuple[torch.Tensor, torch.Tensor]]]:
         B, T, C = q.size()  # batch size, sequence length, d_model
         dtype = k.dtype
@@ -665,7 +670,7 @@ class OLMoBlock(nn.Module):
         att = att.transpose(1, 2).contiguous().view(B, T, C)
 
         # Apply output projection.
-        return self.attn_out(att), present
+        return self.attn_out(att, expansions_to_use=expansions_to_use), present
 
     @abstractmethod
     def forward(
@@ -676,6 +681,7 @@ class OLMoBlock(nn.Module):
         use_cache: bool = False,
         max_doc_len: Optional[int] = None,
         cu_doc_lens: Optional[torch.Tensor] = None,
+        expansions_to_use: Optional[List[int]] = None,  # Add parameter
     ) -> Tuple[torch.Tensor, Optional[Tuple[torch.Tensor, torch.Tensor]]]:
         raise NotImplementedError
 
@@ -706,7 +712,7 @@ class OLMoSequentialBlock(OLMoBlock):
             config.effective_n_kv_heads * head_dim,
             config.effective_n_kv_heads * head_dim,
         )
-        if not UseMKM:
+        if not config.use_mkm:
             self.att_proj = nn.Linear(
                 config.d_model, sum(self.fused_dims), bias=config.include_bias, device=config.init_device
             )
@@ -717,13 +723,15 @@ class OLMoSequentialBlock(OLMoBlock):
         else:
             self.att_proj = CustomLayerMKM(
                 config.d_model, sum(self.fused_dims), 
-                Factor1, Factor2,
+                config.mkm_factor1, config.mkm_factor2,
+                mkm_type=config.mkm_type,  # Pass mkm_type parameter
                 bias=config.include_bias, 
                 device=config.init_device
             )
             self.ff_proj = CustomLayerMKM(
                 config.d_model, self.hidden_size,
-                Factor1, Factor2,
+                config.mkm_factor1, config.mkm_factor2,
+                mkm_type=config.mkm_type,  # Pass mkm_type parameter 
                 bias=config.include_bias,
                 device=config.init_device
             )
@@ -761,6 +769,7 @@ class OLMoSequentialBlock(OLMoBlock):
         use_cache: bool = False,
         max_doc_len: Optional[int] = None,
         cu_doc_lens: Optional[torch.Tensor] = None,
+        expansions_to_use: Optional[List[int]] = None,  # Add parameter
     ) -> Tuple[torch.Tensor, Optional[Tuple[torch.Tensor, torch.Tensor]]]:
         # Get query, key, value projections.
         # shape:
@@ -779,7 +788,7 @@ class OLMoSequentialBlock(OLMoBlock):
         else:
             h = x
 
-        qkv = self.att_proj(h)
+        qkv = self.att_proj(h, expansions_to_use=expansions_to_use)
 
         if self.config.clip_qkv is not None:
             qkv.clamp_(min=-self.config.clip_qkv, max=self.config.clip_qkv)
@@ -798,6 +807,7 @@ class OLMoSequentialBlock(OLMoBlock):
                 use_cache=use_cache,
                 max_doc_len=max_doc_len,
                 cu_doc_lens=cu_doc_lens,
+                expansions_to_use=expansions_to_use,  # Pass expansions
             )
         else:
             att, cache = self.attention(
@@ -809,6 +819,7 @@ class OLMoSequentialBlock(OLMoBlock):
                 use_cache=use_cache,
                 max_doc_len=max_doc_len,
                 cu_doc_lens=cu_doc_lens,
+                expansions_to_use=expansions_to_use,  # Pass expansions
             )
 
         if self.config.norm_after:
@@ -831,13 +842,13 @@ class OLMoSequentialBlock(OLMoBlock):
             else:
                 x = self.ff_norm(x)
 
-        x = self.ff_proj(x)
+        x = self.ff_proj(x, expansions_to_use=expansions_to_use)
 
         if self._activation_checkpoint_fn is not None:
             x = self._activation_checkpoint_fn(self.act, x)  # type: ignore
         else:
             x = self.act(x)
-        x = self.ff_out(x)
+        x = self.ff_out(x, expansions_to_use=expansions_to_use)  # Add expansions parameter here
 
         if self.config.norm_after:
             if self._activation_checkpoint_fn is not None:
@@ -954,12 +965,16 @@ class OLMoLlamaBlock(OLMoBlock):
         use_cache: bool = False,
         max_doc_len: Optional[int] = None,
         cu_doc_lens: Optional[torch.Tensor] = None,
+        expansions_to_use: Optional[List[int]] = None,  # Add parameter
     ) -> Tuple[torch.Tensor, Optional[Tuple[torch.Tensor, torch.Tensor]]]:
         # Get query, key, value projections.
         # shape:
         #  - for regular attn q, k, v: (batch_size, seq_len, d_model)
         #  - for multi-query attn q: (batch_size, seq_len, d_model)
         #                      k, v: (batch_size, seq_len, d_model // n_heads)
+        #  - for group query attn q: (batch_size, seq_len, d_model)
+        #                      k, v: (batch_size, seq_len, d_model // n_kv_heads)
+
         x_normed = self.attn_norm(x)
         q = self.q_proj(x_normed)
         k = self.k_proj(x_normed)
@@ -1052,14 +1067,15 @@ class OLMoBlockGroup(nn.ModuleList):
         use_cache: bool = False,
         max_doc_len: Optional[int] = None,
         cu_doc_lens: Optional[torch.Tensor] = None,
+        expansions_to_use: Optional[List[int]] = None,  # Add parameter
     ) -> Tuple[torch.Tensor, Optional[List[Tuple[torch.Tensor, torch.Tensor]]]]:
         attn_key_values: Optional[List[Tuple[torch.Tensor, torch.Tensor]]] = [] if use_cache else None
         for block_idx, block in enumerate(self):
             layer_past = None if layers_past is None else layers_past[block_idx]
             block_idx += self.layer_offset
             if should_checkpoint_block(self.activation_checkpointing_strategy, block_idx):
-                # shape: (batch_size, seq_len, d_model)
-                x, cache = self._activation_checkpoint_fn(  # type: ignore
+                # Pass expansions_to_use to checkpoint function:
+                x, cache = self._activation_checkpoint_fn(
                     block,
                     x,
                     attention_bias=attention_bias,
@@ -1067,9 +1083,10 @@ class OLMoBlockGroup(nn.ModuleList):
                     use_cache=use_cache,
                     max_doc_len=max_doc_len,
                     cu_doc_lens=cu_doc_lens,
+                    expansions_to_use=expansions_to_use,  # Add parameter
                 )
             else:
-                # shape: (batch_size, seq_len, d_model)
+                # Pass expansions_to_use to block forward:
                 x, cache = block(
                     x,
                     attention_bias=attention_bias,
@@ -1077,7 +1094,9 @@ class OLMoBlockGroup(nn.ModuleList):
                     use_cache=use_cache,
                     max_doc_len=max_doc_len,
                     cu_doc_lens=cu_doc_lens,
+                    expansions_to_use=expansions_to_use,  # Add parameter
                 )
+
             if attn_key_values is not None:
                 assert cache is not None
                 attn_key_values.append(cache)
@@ -1290,6 +1309,7 @@ class OLMo(nn.Module):
         output_hidden_states: Optional[bool] = None,
         doc_lens: Optional[torch.Tensor] = None,
         max_doc_lens: Optional[Sequence[int]] = None,
+        expansions_to_use: Optional[List[int]] = None,  # Add parameter
     ) -> OLMoOutput:
         """
         :param input_ids: A tensor of shape `(batch_size, seq_len)`.
@@ -1323,6 +1343,7 @@ class OLMo(nn.Module):
         :param doc_lens: Document lengths to use in attention for intra-document masking.
             Shape `(batch_size, max_docs)`.
         :param max_doc_lens: Maximum document length for each instance in the batch.
+        :param expansions_to_use: A list of expansions to use for the model.
         """
         output_hidden_states = output_hidden_states if output_hidden_states is not None else False
 
@@ -1426,6 +1447,7 @@ class OLMo(nn.Module):
                         use_cache=use_cache,
                         max_doc_len=max_doc_len,
                         cu_doc_lens=cu_doc_lens,
+                        expansions_to_use=expansions_to_use,  # Add parameter
                     )
                 else:
                     # shape: (batch_size, seq_len, d_model)
@@ -1436,6 +1458,7 @@ class OLMo(nn.Module):
                         use_cache=use_cache,
                         max_doc_len=max_doc_len,
                         cu_doc_lens=cu_doc_lens,
+                        expansions_to_use=expansions_to_use,  # Add parameter
                     )
 
                 if attn_key_values is not None:
@@ -1461,6 +1484,7 @@ class OLMo(nn.Module):
                     use_cache=use_cache,
                     max_doc_len=max_doc_len,
                     cu_doc_lens=cu_doc_lens,
+                    expansions_to_use=expansions_to_use,  # Add parameter
                 )
                 if attn_key_values is not None:
                     assert cache is not None

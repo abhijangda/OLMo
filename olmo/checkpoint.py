@@ -604,7 +604,9 @@ class Checkpointer(metaclass=ABCMeta):
     def _save_config(self, dir: PathOrStr, *, upload_to: Optional[str] = None) -> None:
         if get_global_rank() == 0:
             log.info("Saving config...")
+            print(607, Path(dir)/"config.yaml")
             self.cfg.save(config_path := Path(dir) / "config.yaml")
+            print(609)
             if upload_to is not None:
                 upload_target = f"{upload_to}/config.yaml"
                 log.info(f"Uploading {config_path} to {upload_target}")

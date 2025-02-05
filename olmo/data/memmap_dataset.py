@@ -159,6 +159,7 @@ class MemMapDataset(Dataset[Dict[str, Any]]):
         item_size = dtype(0).itemsize
         bytes_start = index * item_size * self._chunk_size
         num_bytes = item_size * self._chunk_size
+        # print(f"call get_bytes_range from {path} range {bytes_start} -> {bytes_start+num_bytes}", flush=True)
         buffer = get_bytes_range(path, bytes_start, num_bytes)
         array = np.frombuffer(buffer, dtype=dtype)
         if dtype == np.bool_:
@@ -197,6 +198,8 @@ class MemMapDataset(Dataset[Dict[str, Any]]):
         out: Dict[str, Any] = {"input_ids": input_ids}
         if self.instance_filter_config is not None:
             out["instance_mask"] = self._validate_instance(input_ids)
+            if not out["instance_mask"]:
+                printf("202, False, for ", self._memmap_paths[memmap_index])
 
         if self._label_mask_paths is not None:
             label_mask = self._read_chunk_from_memmap(
