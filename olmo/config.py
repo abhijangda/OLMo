@@ -478,10 +478,16 @@ class ModelConfig(BaseConfig):
     mkm_type: str = "multi"
     """Type of MKM to use: 'multi' or 'multi_partial'"""
     
-    mkm_factor1: Optional[List[int]] = None
+    mlp_proj_mkm_factors: Optional[List[List[int]]] = None
     """First set of factors for MKM decomposition. If None, default values will be used."""
     
-    mkm_factor2: Optional[List[int]] = None
+    mlp_out_mkm_factors: Optional[List[List[int]]] = None
+    """Second set of factors for MKM decomposition. If None, default values will be used."""
+
+    attn_proj_mkm_factors: Optional[List[List[int]]] = None
+    """First set of factors for MKM decomposition. If None, default values will be used."""
+    
+    attn_out_mkm_factors: Optional[List[List[int]]] = None
     """Second set of factors for MKM decomposition. If None, default values will be used."""
 
     @property

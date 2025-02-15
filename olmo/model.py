@@ -447,7 +447,7 @@ class OLMoBlock(nn.Module):
         assert (self.act.output_multiplier * self.hidden_size) % 1 == 0
 
         # Attention output projection.
-        if not config.use_mkm:
+        if not config.use_mkm or config.attn_out_mkm_factors == None:
             self.attn_out = nn.Linear(
                 config.d_model, config.d_model, bias=config.include_bias, device=config.init_device
             )
@@ -455,15 +455,14 @@ class OLMoBlock(nn.Module):
             self.attn_out = CustomLayerMKM(
                 config.d_model, 
                 config.d_model,
-                config.mkm_factor1,
-                config.mkm_factor2,
+                config.attn_out_mkm_factors,
                 mkm_type=config.mkm_type,
                 bias=config.include_bias,
                 device=config.init_device
             )
 
         # Feed-forward output projection with MKM
-        if not config.use_mkm:
+        if not config.use_mkm or config.mlp_out_mkm_factors == None:
             self.ff_out = nn.Linear(
                 int(self.act.output_multiplier * self.hidden_size),
                 config.d_model,
@@ -474,8 +473,7 @@ class OLMoBlock(nn.Module):
             self.ff_out = CustomLayerMKM(
                 int(self.act.output_multiplier * self.hidden_size),
                 config.d_model,
-                config.mkm_factor1, 
-                config.mkm_factor2,
+                config.mlp_out_mkm_factors,
                 mkm_type=config.mkm_type,
                 bias=config.include_bias,
                 device=config.init_device
@@ -670,7 +668,10 @@ class OLMoBlock(nn.Module):
         att = att.transpose(1, 2).contiguous().view(B, T, C)
 
         # Apply output projection.
-        return self.attn_out(att, expansions_to_use=expansions_to_use), present
+        if isinstance(self.attn_out, CustomLayerMKM):
+            return self.attn_out(att, expansions_to_use=expansions_to_use), present
+        else:
+            return self.attn_out(att), present
 
     @abstractmethod
     def forward(
@@ -712,25 +713,28 @@ class OLMoSequentialBlock(OLMoBlock):
             config.effective_n_kv_heads * head_dim,
             config.effective_n_kv_heads * head_dim,
         )
-        if not config.use_mkm:
+        if not config.use_mkm or config.attn_proj_mkm_factors == None:
             self.att_proj = nn.Linear(
                 config.d_model, sum(self.fused_dims), bias=config.include_bias, device=config.init_device
             )
+        else:
+            self.att_proj = CustomLayerMKM(
+                config.d_model, sum(self.fused_dims), 
+                config.attn_proj_mkm_factors,
+                mkm_type=config.mkm_type,  # Pass mkm_type parameter
+                bias=config.include_bias, 
+                device=config.init_device
+            )
+
+        if not config.use_mkm or config.mlp_proj_mkm_factors == None:
             # Feed-forward input projection.
             self.ff_proj = nn.Linear(
                 config.d_model, self.hidden_size, bias=config.include_bias, device=config.init_device
             )
         else:
-            self.att_proj = CustomLayerMKM(
-                config.d_model, sum(self.fused_dims), 
-                config.mkm_factor1, config.mkm_factor2,
-                mkm_type=config.mkm_type,  # Pass mkm_type parameter
-                bias=config.include_bias, 
-                device=config.init_device
-            )
             self.ff_proj = CustomLayerMKM(
                 config.d_model, self.hidden_size,
-                config.mkm_factor1, config.mkm_factor2,
+                config.mlp_proj_mkm_factors,
                 mkm_type=config.mkm_type,  # Pass mkm_type parameter 
                 bias=config.include_bias,
                 device=config.init_device
@@ -787,8 +791,10 @@ class OLMoSequentialBlock(OLMoBlock):
                 h = self.attn_norm(x)
         else:
             h = x
-
-        qkv = self.att_proj(h, expansions_to_use=expansions_to_use)
+        if isinstance(self.att_proj, CustomLayerMKM):
+            qkv = self.att_proj(h, expansions_to_use=expansions_to_use)
+        else:
+            qkv = self.att_proj(h)
 
         if self.config.clip_qkv is not None:
             qkv.clamp_(min=-self.config.clip_qkv, max=self.config.clip_qkv)
@@ -842,13 +848,20 @@ class OLMoSequentialBlock(OLMoBlock):
             else:
                 x = self.ff_norm(x)
 
-        x = self.ff_proj(x, expansions_to_use=expansions_to_use)
+        if isinstance(self.ff_proj, CustomLayerMKM):
+            x = self.ff_proj(x, expansions_to_use=expansions_to_use)
+        else:
+            x = self.ff_proj(x)
 
         if self._activation_checkpoint_fn is not None:
             x = self._activation_checkpoint_fn(self.act, x)  # type: ignore
         else:
             x = self.act(x)
-        x = self.ff_out(x, expansions_to_use=expansions_to_use)  # Add expansions parameter here
+        
+        if isinstance(self.ff_out, CustomLayerMKM):
+            x = self.ff_out(x, expansions_to_use=expansions_to_use)  # Add expansions parameter here
+        else:
+            x = self.ff_out(x)
 
         if self.config.norm_after:
             if self._activation_checkpoint_fn is not None:

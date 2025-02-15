@@ -18,8 +18,7 @@ class CustomLayerMKM(nn.Module):
         self,
         in_features: int,
         out_features: int,
-        factor_1,  # List of values for first Kronecker factor
-        factor_2,  # List of values for second Kronecker factor
+        factors,  # List of dims for 2-D Kronecker factor 
         mkm_type: str = "multi",  # Type: 'multi', 'multi_partial'
         bias: bool = True,
         device=None,
@@ -44,19 +43,17 @@ class CustomLayerMKM(nn.Module):
         if mkm_type not in valid_types:
             raise ValueError(f"Invalid mkm_type '{mkm_type}'. Must be one of {valid_types}.")
         self.mkm_type = mkm_type
-
+        print(factors)
         # Ensure factor_1 and factor_2 are lists
-        if not isinstance(factor_1, list):
-            raise TypeError("factor_1 must be a list of integers.")
-        if not isinstance(factor_2, list):
-            raise TypeError("factor_2 must be a list of integers.")
-
-        assert len(factor_1) == len(factor_2), (
-            "factor_1 and factor_2 must have the same number of elements!"
-        )
+        if not isinstance(factors, list):
+            raise TypeError("factors must be a list.")
+            for factor in factors:
+                print(factor)
+                if not isinstance(factor, list) or not len(factor) == 2:
+                    raise TypeError("factor must be list of 2 integers.")
 
         # Ensure that the total input and output features are divisible by the factors
-        for f1, f2 in zip(factor_1, factor_2):
+        for f1, f2 in factors:
             if in_features % f1 != 0:
                 raise ValueError(f"Input features ({in_features}) must be divisible by factor_1 ({f1}).")
             if out_features % f2 != 0:
@@ -64,13 +61,13 @@ class CustomLayerMKM(nn.Module):
 
         self._in_features = in_features   # Total input features (I)
         self._out_features = out_features # Total output features (O)
-        self.n_expansions = len(factor_1) # Number of expansions
+        self.n_expansions = len(factors) # Number of expansions
 
         # Store expansions as pairs of smaller weight matrices
         self.expansions = nn.ParameterList()
         self.expansions_shape = []
 
-        for idx, (f1, f2) in enumerate(zip(factor_1, factor_2)):
+        for idx, (f1, f2) in enumerate(factors):
             # Decompose dimensions for Kronecker factors
             # Input dimensions I = I1 * I2, where I1 = in_features_I1, I2 = in_features_I2
             in_features_I1 = in_features // f1  # Compute I1
