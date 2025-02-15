@@ -198,9 +198,7 @@ class MemMapDataset(Dataset[Dict[str, Any]]):
         out: Dict[str, Any] = {"input_ids": input_ids}
         if self.instance_filter_config is not None:
             out["instance_mask"] = self._validate_instance(input_ids)
-            if not out["instance_mask"]:
-                printf("202, False, for ", self._memmap_paths[memmap_index])
-
+            
         if self._label_mask_paths is not None:
             label_mask = self._read_chunk_from_memmap(
                 self._label_mask_paths[memmap_index], memmap_local_index, dtype=np.bool_
