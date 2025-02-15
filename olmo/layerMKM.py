@@ -43,12 +43,11 @@ class CustomLayerMKM(nn.Module):
         if mkm_type not in valid_types:
             raise ValueError(f"Invalid mkm_type '{mkm_type}'. Must be one of {valid_types}.")
         self.mkm_type = mkm_type
-        print(factors)
+
         # Ensure factor_1 and factor_2 are lists
         if not isinstance(factors, list):
             raise TypeError("factors must be a list.")
             for factor in factors:
-                print(factor)
                 if not isinstance(factor, list) or not len(factor) == 2:
                     raise TypeError("factor must be list of 2 integers.")
 
