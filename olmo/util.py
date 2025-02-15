@@ -709,12 +709,12 @@ def _http_file_size(scheme: str, host_name: str, path: str) -> int:
 
     while True:
         try:
-            response = requests.head(f"{scheme}://{host_name}/{path}", allow_redirects=True, timeout=1)
+            response = requests.head(f"{scheme}://{host_name}/{path}", allow_redirects=True, timeout=5)
             return int(response.headers.get("content-length"))
         except Exception as e:
             import time
             import random
-            secs = random.randint(1, 30)
+            secs = random.randint(1, 10)
             time.sleep(secs)
             from datetime import datetime
             print(f"{datetime.now().strftime('%Y-%m-%d %H:%M:%S')}: Got exception {e} trying to access {scheme}://{host_name}/{path}. Trying again after {secs} seconds", flush=True)
@@ -728,7 +728,7 @@ def _http_get_bytes_range(scheme: str, host_name: str, path: str, bytes_start: i
             if got_exception:
                 print(f"729: Re-reading from {scheme}://{host_name}/{path}", flush=True)
             response = requests.get(
-                f"{scheme}://{host_name}/{path}", headers={"Range": f"bytes={bytes_start}-{bytes_start+num_bytes-1}"},timeout=1
+                f"{scheme}://{host_name}/{path}", headers={"Range": f"bytes={bytes_start}-{bytes_start+num_bytes-1}"},timeout=5
             )
             result = response.content
             assert (
@@ -738,7 +738,7 @@ def _http_get_bytes_range(scheme: str, host_name: str, path: str, bytes_start: i
         except Exception as e:
             import time
             import random
-            secs = random.randint(1, 30)
+            secs = random.randint(1, 5)
             time.sleep(secs)
             from datetime import datetime
             print(f"{datetime.now().strftime('%Y-%m-%d %H:%M:%S')}: Got exception {e} trying to read {scheme}://{host_name}/{path}. Trying again after {secs} seconds", flush=True)
