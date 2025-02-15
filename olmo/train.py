@@ -1271,6 +1271,16 @@ class Trainer:
                         else:
                             log.info(f"[step={self.global_step}/{self.max_steps},epoch={epoch}]")
 
+                    if torch.version.hip != None and self.global_step % 10 == 0:
+                        log.info(f"Sleep for 5 seconds")
+                        import time as time_module
+                        time_module.sleep(5)
+                        if False and self.global_step % 10 == 0:
+                            log.info(f"Sleep for 5 seconds")
+                            time_module.sleep(3)
+                            if self.global_step % 20 == 0:
+                                log.info(f"Sleep for 5 seconds")
+                                time_module.sleep(5)
                     # Log metrics to W&B.
                     if (
                         wandb.run is not None

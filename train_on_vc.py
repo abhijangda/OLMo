@@ -21,16 +21,27 @@ if nodes > 1:
             run(f"ssh node-{node} 'rm -rf /home/aiscuser/ajangda ; mkdir /home/aiscuser/ajangda'")
             run(f"scp /home/aiscuser/ajangda/OLMo.zip node-{node}:/home/aiscuser/ajangda/OLMo.zip")
             run(f"ssh node-{node} 'unzip -o /home/aiscuser/ajangda/OLMo.zip -d /'")
-            run(f"ssh node-{node} 'cd /home/aiscuser/ajangda/OLMo/ ; pip install -e .[all] ; pip install ./pyfastkron-1.0.1-py3-none-any.whl; pip install aioshutil'")
+        run(f"ssh node-{node} 'cd /home/aiscuser/ajangda/OLMo/ ; pip install -e .[all] ; pip install ./pyfastkron-1.0.1-py3-none-any.whl; pip install aioshutil'")
         # run(f"ssh node-{node} killall -SIGKILL /home/ajangda/anaconda3/envs/mscclpp/bin/python")
+#sys.exit(0)
+#for node in range(nodes):
+#    run(f"ssh node-{node} 'cd /home/aiscuser/ajangda/OLMo/ ; pip install -e .[all] ; pip install ./pyfastkron-1.0.1-py3-none-any.whl; pip install aioshutil'")
 
-train_id = datetime.now().strftime('%Y%m-%d%H-%M%S')
-torchrun = f"torchrun --rdzv_id=12345 --rdzv_backend=c10d --rdzv_endpoint={ip}:8645 --nnodes {nodes} --nproc_per_node=8 scripts/train.py configs/official-1124/OLMo2-1B-MKM-stage1.yaml --save_overwrite --wandb.name={train_id}"
+export_envs = "export NCCL_PROTO=Simple ; export NCCL_ALGO=Ring ; export TORCH_INDUCTOR_BACKEND=cpp ;" #"export NCCL_P2P_DISABLE=WARN ; export TORCH_DISTRIBUTED_DEBUG=DETAIL ; export TORCH_CPP_LOG_LEVEL=INFO; "
+step = sys.argv[4]
+train_id = sys.argv[3] #"202412-2110-2852-7B-compressed-run-03" #datetime.now().strftime('%Y%m-%d%H-%M%S')+"-7B-compressed"
+import random
+rdzv_id = random.randint(1000, 9999)
+port = random.randint(10000,65536)
+torchrun = f"torchrun --rdzv_id={rdzv_id} --rdzv_backend=c10d --rdzv_endpoint={ip}:{port} --nnodes {nodes} --nproc_per_node=8 scripts/train.py configs/official-1124/OLMo2-{train_id}.yaml --save_overwrite --wandb.name={train_id} --fsdp.wrapping_strategy=null --save_interval_ephemeral=100"
+load_path_node_1 = f"/home/aiscuser/mnt-node-0/ajangda/step{step}/"
+load_path_node_0 = f"/home/aiscuser/ajangda/step{step}/"
 for node in range(nodes):
-    olmo_data = f"/scratch/AzureBlobStorage_CODE/scratch/workspaceblobstore/OLMo-data/{train_id}"
+    olmo_data = f"/scratch/whitneyblobstore/OLMo-data/{train_id}"
     remote_folder=f"{olmo_data}/node-{node}/"
     os.makedirs(remote_folder, exist_ok=True)
-    stdout=f"{remote_folder}/stdout"
-    nohup_wrap = f"cd /home/aiscuser/ajangda/OLMo ; nohup {torchrun} --remote_save_folder={remote_folder} &> {stdout} &"
-    run(f"ssh node-{node} '{nohup_wrap}'")
-
+    stdout=("stdout" if node==0 else "/home/aiscuser/mnt-node-0/ajangda/OLMo/stdout")+ str(node) #f"{remote_folder}/stdout"
+    load_path = load_path_node_0 if node == 0 else load_path_node_1
+    load_path = f"--load_path={load_path}"
+    nohup_wrap = f"cd /home/aiscuser/ajangda/OLMo ; nohup {torchrun}  &>> {stdout} &"
+    run(f"ssh node-{node} '{export_envs} {nohup_wrap}'")
