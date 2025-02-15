@@ -726,9 +726,9 @@ def _http_get_bytes_range(scheme: str, host_name: str, path: str, bytes_start: i
     while True:
         try:
             if got_exception:
-                print(f"729: Re-reading from {scheme}://{host_name}/{path}", flush=True, allow_redirects=True, timeout=1)
+                print(f"729: Re-reading from {scheme}://{host_name}/{path}", flush=True)
             response = requests.get(
-                f"{scheme}://{host_name}/{path}", headers={"Range": f"bytes={bytes_start}-{bytes_start+num_bytes-1}"},timeout=10
+                f"{scheme}://{host_name}/{path}", headers={"Range": f"bytes={bytes_start}-{bytes_start+num_bytes-1}"},timeout=1
             )
             result = response.content
             assert (
