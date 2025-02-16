@@ -1,13 +1,13 @@
 from typing import Optional, Union
 
 import torch.nn as nn
-from .layerMKM import CustomLayerMKM
+from .layerMKM import *
 
 __all__ = ["init_normal"]
 
 
 def init_normal(
-    module: Union[nn.Linear, nn.Embedding, CustomLayerMKM],
+    module: Union[nn.Linear, nn.Embedding, CustomLayerMKM, FeedForwardProjMKM],
     std: float,
     init_cutoff_factor: Optional[float] = None,
 ):
@@ -20,7 +20,7 @@ def init_normal(
         std: Standard deviation of the normal distribution.
         init_cutoff_factor: Factor to determine truncation range for truncated normal initialization.
     """
-    if isinstance(module, CustomLayerMKM):
+    if isinstance(module, CustomLayerMKM) or isinstance(module, FeedForwardProjMKM):
         # Initialize weights in CustomLayerMKM's expansions
         for w in module.expansions:
             if init_cutoff_factor is not None:

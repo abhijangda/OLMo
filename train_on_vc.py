@@ -16,12 +16,24 @@ if nodes > 1:
     run("rm -rf /home/aiscuser/ajangda/OLMo/step*")
     run("rm -rf /home/aiscuser/ajangda/OLMo/train_data/")
     run("cd /home/aiscuser/ajangda/ ; rm -rf OLMo.zip ; zip -r OLMo.zip /home/aiscuser/ajangda/OLMo/")
+    commands = ""
     for node in range(nodes):
         if node != 0:
-            run(f"ssh node-{node} 'rm -rf /home/aiscuser/ajangda ; mkdir /home/aiscuser/ajangda'")
-            run(f"scp /home/aiscuser/ajangda/OLMo.zip node-{node}:/home/aiscuser/ajangda/OLMo.zip")
-            run(f"ssh node-{node} 'unzip -o /home/aiscuser/ajangda/OLMo.zip -d /'")
-        run(f"ssh node-{node} 'cd /home/aiscuser/ajangda/OLMo/ ; pip install -e .[all] ; pip install ./pyfastkron-1.0.1-py3-none-any.whl; pip install aioshutil'")
+            commands += f"ssh node-{node} 'rm -rf /home/aiscuser/ajangda ; mkdir /home/aiscuser/ajangda' \n"
+    
+    for node in range(nodes):
+        if node != 0:
+            commands += f"scp /home/aiscuser/ajangda/OLMo.zip node-{node}:/home/aiscuser/ajangda/OLMo.zip &\n"
+    commands += "wait\n"
+    for node in range(nodes):
+        if node != 0:
+            commands += f"ssh node-{node} 'unzip -o /home/aiscuser/ajangda/OLMo.zip -d /' &\n"
+    commands += "wait\n"
+    for node in range(nodes):
+        commands += f"ssh node-{node} 'cd /home/aiscuser/ajangda/OLMo/ ; pip install -e .[all] ; pip install ./pyfastkron-1.0.1-py3-none-any.whl; pip install aioshutil' &\n"
+    
+    run(commands)
+    
         # run(f"ssh node-{node} killall -SIGKILL /home/ajangda/anaconda3/envs/mscclpp/bin/python")
 #sys.exit(0)
 #for node in range(nodes):

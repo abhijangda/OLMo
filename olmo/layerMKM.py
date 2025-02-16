@@ -189,3 +189,43 @@ class CustomLayerMKM(nn.Module):
             "n_expansions=" + str(self.n_expansions) + ", " + \
             "bias=" + str(self.bias_O is not None) + "\n" + \
             "Expansions:\n    " + expansion_sizes_str
+
+class FeedForwardProjMKM(nn.Module):
+    def __init__(
+        self,
+        in_features: int,
+        out_features: int,
+        factors,  # List of dims for 2-D Kronecker factor 
+        mkm_type: str = "multi",  # Type: 'multi', 'multi_partial'
+        bias: bool = True,
+        device=None,
+        dtype=None,
+    ):
+        super().__init__()
+        factory_kwargs = {"device": device, "dtype": dtype}
+        self._in_features = in_features   # Total input features (I)
+        self._out_features = out_features # Total output features (O)
+        self.mkm_w1 = CustomLayerMKM(in_features, out_features//2, factors, mkm_type, bias, device, dtype)
+        self.mkm_w2 = CustomLayerMKM(in_features, out_features//2, factors, mkm_type, bias, device, dtype)
+        self.reset_parameters()
+
+    @property
+    def in_features(self):
+        return self._in_features  # Total input features (I)
+
+    @property
+    def out_features(self):
+        return self._out_features  # Total output features (O)
+
+    @property
+    def expansions(self):
+        return list(self.mkm_w1.expansions) + list(self.mkm_w2.expansions)
+
+    def forward(self, x, expansions_to_use=None):
+        xw1 = self.mkm_w1(x, expansions_to_use)
+        xw2 = self.mkm_w2(x, expansions_to_use)
+        return torch.cat((xw1, xw2), dim=-1)
+    
+    def reset_parameters(self):
+        self.mkm_w1.reset_parameters()
+        self.mkm_w2.reset_parameters()
