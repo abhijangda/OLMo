@@ -34,7 +34,7 @@ chkp_idx = 0
 
 def run():
   global last_checkpoint_step, chkp_idx
-  BASE_CHKP_DIR = "/scratch/AzureBlobStorage_CODE/scratch/workspaceblobstore/OLMo-data/" + chkp_dir
+  BASE_CHKP_DIR = "/scratch/whitneyblobstore/OLMo-data/" + chkp_dir
   NODES = 8
 
   for node in range(NODES):
@@ -88,9 +88,11 @@ def run():
         commands += "wait\n"
 
   print(f"Saving checkpoint for step{latest_step} using: ", commands, flush=True)
-
+  import time
+  s = time.time()
   run_command(commands)
-  print(f"Checkpoints saved")
+  e = time.time()
+  print(f"Checkpoints saved in {e-s} seconds")
 
 while True:
   run()
