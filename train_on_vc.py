@@ -12,8 +12,12 @@ def run(c):
     if s != 0:
         print("Error ", o)
 
-SSH = "ssh -F /ddn/ajangda/ssh-config"
-SCP = "scp -F /ddn/ajangda/ssh-config"
+if os.path.exists("/ddn/ajangda/ssh-config"):
+    SSH = "ssh -F /ddn/ajangda/ssh-config"
+    SCP = "scp -F /ddn/ajangda/ssh-config"
+else:
+    SSH = "ssh"
+    SCP = "scp"
 
 if nodes > 1:
     run("rm -rf ~/ajangda/OLMo/step*")
