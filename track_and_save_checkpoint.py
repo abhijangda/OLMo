@@ -35,7 +35,7 @@ chkp_idx = 0
 def run():
   global last_checkpoint_step, chkp_idx
   BASE_CHKP_DIR = "/scratch/whitneyblobstore/OLMo-data/" + chkp_dir
-  NODES = 8
+  NODES = 16
 
   for node in range(NODES):
     shutil.copyfile(f"stdout{node}", os.path.join(BASE_CHKP_DIR, f"stdout{node}"))
