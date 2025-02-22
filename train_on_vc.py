@@ -28,14 +28,16 @@ if nodes > 1:
     for node in range(nodes):
         if node != 0:
             commands += f"{SSH} node-{node} 'rm -rf ~/ajangda ; mkdir ~/ajangda' \n"
-    
+
     for node in range(nodes):
         if node != 0:
             commands += f"{SCP} ~/ajangda/OLMo.zip node-{node}:~/ajangda/OLMo.zip &\n"
+
     commands += "wait\n"
     for node in range(nodes):
         if node != 0:
             commands += f"{SSH} node-{node} 'unzip -o ~/ajangda/OLMo.zip -d /' &\n"
+
     commands += "wait\n"
     for node in range(nodes):
         commands += f"{SSH} node-{node} 'cd ~/ajangda/OLMo/ ; pip install -e .[all] ; pip install ./pyfastkron-1.0.1-py3-none-any.whl; pip install aioshutil' &\n"
@@ -54,8 +56,8 @@ import random
 rdzv_id = random.randint(1000, 9999)
 port = random.randint(10000,65536)
 torchrun = f"torchrun --rdzv_id={rdzv_id} --rdzv_backend=c10d --rdzv_endpoint={ip}:{port} --nnodes {nodes} --nproc_per_node=8 scripts/train.py configs/official-1124/OLMo2-{train_id}.yaml --save_overwrite --wandb.name={train_id} --fsdp.wrapping_strategy=null --save_interval_ephemeral=100"
-load_path_node_1 = f"~/mnt-node-0/ajangda/step{step}/"
-load_path_node_0 = f"~/ajangda/step{step}/"
+load_path_node_1 = f"/home/aiscuser/mnt-node-0/ajangda/step{step}/"
+load_path_node_0 = f"/home/aiscuser/ajangda/step{step}/"
 for node in range(nodes):
     olmo_data = f"/scratch/whitneyblobstore/OLMo-data/{train_id}"
     remote_folder=f"{olmo_data}/node-{node}/"
