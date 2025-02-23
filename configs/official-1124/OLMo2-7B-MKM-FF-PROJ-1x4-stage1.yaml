@@ -99,6 +99,7 @@ wandb:
 fsdp:
   wrapping_strategy: null #by_block_and_size
   precision: mixed
+  sharding_strategy: HYBRID_SHARD
 
 max_grad_norm: 1.0
 max_grad_norm_ratio: null
