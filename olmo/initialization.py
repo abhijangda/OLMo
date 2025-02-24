@@ -7,7 +7,7 @@ __all__ = ["init_normal"]
 
 
 def init_normal(
-    module: Union[nn.Linear, nn.Embedding, CustomLayerMKM, FeedForwardProjMKM],
+    module: Union[nn.Linear, nn.Embedding, CustomLayerMKM, FeedForwardProjMKM, AttentionProjMKM],
     std: float,
     init_cutoff_factor: Optional[float] = None,
 ):
@@ -20,7 +20,8 @@ def init_normal(
         std: Standard deviation of the normal distribution.
         init_cutoff_factor: Factor to determine truncation range for truncated normal initialization.
     """
-    if isinstance(module, CustomLayerMKM) or isinstance(module, FeedForwardProjMKM):
+    if isinstance(module, CustomLayerMKM) or isinstance(module, FeedForwardProjMKM) or\
+       isinstance(module, AttentionProjMKM):
         # Initialize weights in CustomLayerMKM's expansions
         for w in module.expansions:
             if init_cutoff_factor is not None:

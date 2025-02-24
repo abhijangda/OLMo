@@ -229,3 +229,45 @@ class FeedForwardProjMKM(nn.Module):
     def reset_parameters(self):
         self.mkm_w1.reset_parameters()
         self.mkm_w2.reset_parameters()
+
+    
+class AttentionProjMKM(nn.Module):
+    def __init__(
+        self,
+        in_features: int,
+        out_dims: int,
+        factors,  # List of dims for 2-D Kronecker factor 
+        mkm_type: str = "multi",  # Type: 'multi', 'multi_partial'
+        bias: bool = True,
+        device=None,
+        dtype=None,
+    ):
+        super().__init__()
+        factory_kwargs = {"device": device, "dtype": dtype}
+        self._in_features = in_features   # Total input features (I)
+        self._out_features = sum(out_dims) # Total output features (O)
+        self.mkm_ws = nn.ParameterList()
+        for out_dim in out_dims:
+            w = CustomLayerMKM(in_features, out_dim, factors, mkm_type, bias, device, dtype)
+            self.mkm_ws.append(w)
+        self.reset_parameters()
+
+    @property
+    def in_features(self):
+        return self._in_features  # Total input features (I)
+
+    @property
+    def out_features(self):
+        return self._out_features  # Total output features (O)
+
+    @property
+    def expansions(self):
+        return sum([list(w.expansions) for w in self.mkm_ws], [])
+
+    def forward(self, x, expansions_to_use=None):
+        xws = [ws(x, expansions_to_use) for ws in self.mkm_ws]
+        return torch.cat((xws), dim=-1)
+    
+    def reset_parameters(self):
+        for w in self.mkm_ws:
+            w.reset_parameters()

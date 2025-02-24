@@ -404,7 +404,7 @@ def alibi_attention_bias(seq_len: int, config: ModelConfig, device: torch.device
 
 # from pyfastkron import fastkrontorch as fk
 
-from .layerMKM import CustomLayerMKM, FeedForwardProjMKM
+from .layerMKM import CustomLayerMKM, FeedForwardProjMKM, AttentionProjMKM
 
 class OLMoBlock(nn.Module):
     """
@@ -718,8 +718,8 @@ class OLMoSequentialBlock(OLMoBlock):
                 config.d_model, sum(self.fused_dims), bias=config.include_bias, device=config.init_device
             )
         else:
-            self.att_proj = CustomLayerMKM(
-                config.d_model, sum(self.fused_dims), 
+            self.att_proj = AttentionProjMKM(
+                config.d_model, self.fused_dims, 
                 config.attn_proj_mkm_factors,
                 mkm_type=config.mkm_type,  # Pass mkm_type parameter
                 bias=config.include_bias, 
@@ -791,7 +791,7 @@ class OLMoSequentialBlock(OLMoBlock):
                 h = self.attn_norm(x)
         else:
             h = x
-        if isinstance(self.att_proj, CustomLayerMKM):
+        if isinstance(self.att_proj, FeedForwardProjMKM):
             qkv = self.att_proj(h, expansions_to_use=expansions_to_use)
         else:
             qkv = self.att_proj(h)
