@@ -1,6 +1,7 @@
 import torch
 from torch import nn
 import math
+from pyfastkron import fastkrontorch as fk
 
 """
 Dimension key:
@@ -143,24 +144,27 @@ class CustomLayerMKM(nn.Module):
             expansions_indices = range(self.n_expansions)
 
         # Accumulate sum of Kronecker products over specified expansions
-        W_sum_OI = None
-        for i in expansions_indices:
-            weight_O1I1 = self.expansions[2 * i]     # [O1, I1]
-            weight_O2I2 = self.expansions[2 * i + 1] # [O2, I2]
-            # Compute Kronecker product of weight matrices
-            # kron_OI: Shape [O1 * O2, I1 * I2] = [O, I]
-            kron_OI = torch.kron(weight_O2I2, weight_O1I1)
-            # Sum the Kronecker products
-            if W_sum_OI is None:
-                W_sum_OI = kron_OI
-            else:
-                W_sum_OI = W_sum_OI + kron_OI
+        if False and self.n_expansions == 1:
+           output_BO = fk.gemkm(input_BI, [self.expansions[0].t(), self.expansions[1].t()])
+        else:
+            W_sum_OI = None
+            for i in expansions_indices:
+                weight_O1I1 = self.expansions[2 * i]     # [O1, I1]
+                weight_O2I2 = self.expansions[2 * i + 1] # [O2, I2]
+                # Compute Kronecker product of weight matrices
+                # kron_OI: Shape [O1 * O2, I1 * I2] = [O, I]
+                kron_OI = torch.kron(weight_O2I2, weight_O1I1)
+                # Sum the Kronecker products
+                if W_sum_OI is None:
+                    W_sum_OI = kron_OI
+                else:
+                    W_sum_OI = W_sum_OI + kron_OI
 
-        # Perform the matrix multiplication with input
-        # input_BI: Shape [B, I]
-        # W_sum_OI.t(): Shape [I, O]
-        # output_BO: Shape [B, O]
-        output_BO = input_BI.matmul(W_sum_OI.t())
+            # Perform the matrix multiplication with input
+            # input_BI: Shape [B, I]
+            # W_sum_OI.t(): Shape [I, O]
+            # output_BO: Shape [B, O]
+            output_BO = input_BI.matmul(W_sum_OI.t())
 
         # Add bias term if present
         if self.bias_O is not None:
