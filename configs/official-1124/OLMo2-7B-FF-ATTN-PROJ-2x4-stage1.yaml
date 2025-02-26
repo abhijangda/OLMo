@@ -38,10 +38,10 @@ model:
   # MKM configuration
   use_mkm: true
   mkm_type: "multi"
-  mlp_proj_mkm_factors: [[1,4]]
-  mlp_out_mkm_factors: [[4,1]]
-  attn_proj_mkm_factors: [[1,4]]
-  attn_out_mkm_factors: [[4,1]]
+  mlp_proj_mkm_factors: [[2,4]]
+  mlp_out_mkm_factors: [[4,2]]
+  attn_proj_mkm_factors: [[2,4]]
+  attn_out_mkm_factors: [[4,2]]
 
 #mkm_substeps: [[0],[0,1]]
 softmax_auxiliary_loss: true
