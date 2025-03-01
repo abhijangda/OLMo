@@ -65,5 +65,5 @@ for node in range(nodes):
     stdout=("stdout" if node==0 else "~/mnt-node-0/ajangda/OLMo/stdout")+ str(node) #f"{remote_folder}/stdout"
     load_path = load_path_node_0 if node == 0 else load_path_node_1
     load_path = f"--load_path={load_path}"
-    nohup_wrap = f"cd ~/ajangda/OLMo ; nohup {torchrun} {load_path if step != "0" else ""} &>> {stdout} &"
+    nohup_wrap = f"cd ~/ajangda/OLMo ; nohup {torchrun} {load_path if step != '0' else ''} &>> {stdout} &"
     run(f"{SSH} node-{node} '{export_envs} {nohup_wrap}'")
