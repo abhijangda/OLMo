@@ -710,7 +710,7 @@ def _http_file_size(scheme: str, host_name: str, path: str) -> int:
     while True:
         try:
             lengths = []
-            for tries in range(3):
+            for tries in range(2):
                 response = requests.head(f"{scheme}://{host_name}/{path}", allow_redirects=True, timeout=5)
                 lengths += [int(response.headers.get("content-length"))]
             if len(set(lengths)) == 1:
@@ -734,7 +734,7 @@ def _http_get_bytes_range(scheme: str, host_name: str, path: str, bytes_start: i
             if got_exception:
                 print(f"729: Re-reading from {scheme}://{host_name}/{path}", flush=True)
             results = []
-            for tries in range(3):
+            for tries in range(1):
                 response = requests.get(
                     f"{scheme}://{host_name}/{path}", headers={"Range": f"bytes={bytes_start}-{bytes_start+num_bytes-1}"},timeout=5
                 )
@@ -745,7 +745,7 @@ def _http_get_bytes_range(scheme: str, host_name: str, path: str, bytes_start: i
                 results += [result]
             
             if len(set(results)) == 1:
-                return result
+                return results[0]
             else:
                 raise Exception(f"Got {len(set(results))} different responses")
         except Exception as e:
