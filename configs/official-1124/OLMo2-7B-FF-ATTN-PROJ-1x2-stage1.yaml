@@ -96,7 +96,7 @@ wandb:
   project: "llm-kron"
   entity: "abhijangda-microsoft"
   log_interval: 1
-  group: "7B-MLP-ATTN-1x4"
+  group: "7B-MLP-ATTN-1x2"
 
 fsdp:
   wrapping_strategy: null #by_block_and_size
